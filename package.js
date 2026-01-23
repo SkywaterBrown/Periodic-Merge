@@ -2,8 +2,15 @@
   "name": "element-merge-game",
   "version": "1.1.0",
   "description": "Element Merge Game with Global Leaderboards",
-  "dependencies": {
-    "@netlify/neon": "^1.0.0"
+  "main": "game_logic.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "devDependencies": {}
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }
