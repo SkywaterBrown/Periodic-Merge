@@ -127,6 +127,88 @@ localStorage.setItem('elementFusionDeviceId', deviceId);
 // Country detection (fallback to IP detection via API)
 let playerCountry = localStorage.getItem('elementFusionCountry') || '??';
 
+function getDefaultFacts(element) {
+    const defaultFacts = {
+        'H': ['Hydrogen is the most abundant element in the universe'],
+        'He': ['Helium was discovered on the Sun before it was found on Earth'],
+        'C': ['Carbon is the basis of all known life'],
+        'O': ['Oxygen makes up about 21% of Earth\'s atmosphere'],
+        'Au': ['Gold is so malleable that one ounce can be stretched into a wire 50 miles long'],
+        'Fe': ['Iron is the most abundant element on Earth by mass']
+    };
+    
+    return defaultFacts[element.symbol] || [
+        `This element has atomic number ${element.number}`,
+        `It belongs to the ${element.category} category`
+    ];
+}
+
+function getDefaultUses(element) {
+    const defaultUses = {
+        'H': ['Rocket fuel', 'Hydrogen fuel cells'],
+        'He': ['Party balloons', 'Cooling MRI machines'],
+        'C': ['Pencil lead (graphite)', 'Diamond jewelry'],
+        'O': ['Medical oxygen', 'Steel production'],
+        'Au': ['Jewelry', 'Electronics'],
+        'Fe': ['Steel production', 'Construction materials']
+    };
+    
+    return defaultUses[element.symbol] || [
+        'Scientific research',
+        'Industrial applications'
+    ];
+}
+
+function getDefaultDiscoveryInfo(element) {
+    const defaultDiscovery = {
+        'H': 'Discovered by Henry Cavendish in 1766',
+        'He': 'Discovered independently by Pierre Janssen and Norman Lockyer in 1868',
+        'O': 'Discovered independently by Carl Wilhelm Scheele and Joseph Priestley in the 1770s',
+        'Au': 'Known since ancient times',
+        'Fe': 'Known since ancient times, first smelted around 2000 BCE',
+        'U': 'Discovered by Martin Heinrich Klaproth in 1789'
+    };
+    
+    return defaultDiscovery[element.symbol] || 'Discovered through scientific research';
+}
+
+function getDefaultDescription(element) {
+    return `${element.name} is element number ${element.number} in the periodic table.`;
+}
+// Check if elements can be merged
+function canMerge(symbol1, symbol2) {
+    // For now, only allow merging identical elements
+    return symbol1 === symbol2;
+}
+
+// Get result of merging two elements
+function getMergeResult(symbol1, symbol2) {
+    if (!canMerge(symbol1, symbol2)) {
+        return null;
+    }
+    
+    const currentElement = elementMap[symbol1];
+    if (!currentElement) {
+        return null;
+    }
+    
+    // For identical elements, get next element in sequence
+    const nextNumber = currentElement.number + 1;
+    const nextElement = elementByNumber[nextNumber];
+    
+    // Check if merge requires energy
+    const energyCost = Math.floor(currentElement.mass * 5);
+    if (gameState.fusionEnergy < energyCost) {
+        return { success: false, message: `Not enough fusion energy! Need ${energyCost}` };
+    }
+    
+    return nextElement ? { 
+        success: true, 
+        element: nextElement,
+        energyCost: energyCost
+    } : null;
+}
+
 // Load element data from external file
 async function loadElementData() {
     try {
@@ -216,87 +298,7 @@ async function loadElementData() {
         return true;
     }
 }
-function getDefaultFacts(element) {
-    const defaultFacts = {
-        'H': ['Hydrogen is the most abundant element in the universe'],
-        'He': ['Helium was discovered on the Sun before it was found on Earth'],
-        'C': ['Carbon is the basis of all known life'],
-        'O': ['Oxygen makes up about 21% of Earth\'s atmosphere'],
-        'Au': ['Gold is so malleable that one ounce can be stretched into a wire 50 miles long'],
-        'Fe': ['Iron is the most abundant element on Earth by mass']
-    };
-    
-    return defaultFacts[element.symbol] || [
-        `This element has atomic number ${element.number}`,
-        `It belongs to the ${element.category} category`
-    ];
-}
 
-function getDefaultUses(element) {
-    const defaultUses = {
-        'H': ['Rocket fuel', 'Hydrogen fuel cells'],
-        'He': ['Party balloons', 'Cooling MRI machines'],
-        'C': ['Pencil lead (graphite)', 'Diamond jewelry'],
-        'O': ['Medical oxygen', 'Steel production'],
-        'Au': ['Jewelry', 'Electronics'],
-        'Fe': ['Steel production', 'Construction materials']
-    };
-    
-    return defaultUses[element.symbol] || [
-        'Scientific research',
-        'Industrial applications'
-    ];
-}
-
-function getDefaultDiscoveryInfo(element) {
-    const defaultDiscovery = {
-        'H': 'Discovered by Henry Cavendish in 1766',
-        'He': 'Discovered independently by Pierre Janssen and Norman Lockyer in 1868',
-        'O': 'Discovered independently by Carl Wilhelm Scheele and Joseph Priestley in the 1770s',
-        'Au': 'Known since ancient times',
-        'Fe': 'Known since ancient times, first smelted around 2000 BCE',
-        'U': 'Discovered by Martin Heinrich Klaproth in 1789'
-    };
-    
-    return defaultDiscovery[element.symbol] || 'Discovered through scientific research';
-}
-
-function getDefaultDescription(element) {
-    return `${element.name} is element number ${element.number} in the periodic table.`;
-}
-// Check if elements can be merged
-function canMerge(symbol1, symbol2) {
-    // For now, only allow merging identical elements
-    return symbol1 === symbol2;
-}
-
-// Get result of merging two elements
-function getMergeResult(symbol1, symbol2) {
-    if (!canMerge(symbol1, symbol2)) {
-        return null;
-    }
-    
-    const currentElement = elementMap[symbol1];
-    if (!currentElement) {
-        return null;
-    }
-    
-    // For identical elements, get next element in sequence
-    const nextNumber = currentElement.number + 1;
-    const nextElement = elementByNumber[nextNumber];
-    
-    // Check if merge requires energy
-    const energyCost = Math.floor(currentElement.mass * 5);
-    if (gameState.fusionEnergy < energyCost) {
-        return { success: false, message: `Not enough fusion energy! Need ${energyCost}` };
-    }
-    
-    return nextElement ? { 
-        success: true, 
-        element: nextElement,
-        energyCost: energyCost
-    } : null;
-}
 
 // Update reactor energy production
 function updateReactorEnergy() {
