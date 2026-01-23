@@ -1,4 +1,4 @@
-const { neon } = require('@netlify/neon');
+const { neon } = require('@neondatabase/serverless');
 const sql = neon(process.env.NETLIFY_DATABASE_URL);
 
 // Simple API key validation - you can make this more sophisticated
