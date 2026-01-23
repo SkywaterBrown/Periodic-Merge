@@ -74,7 +74,7 @@ let autoSave = {
 // CLOUD SAVE STATE
 let cloudSave = {
     enabled: false,
-    apiEndpoint: 'https://your-backend-api.com/save', // Replace with your actual API
+    apiEndpoint: '/.netlify/functions/cloud-save',
     apiKey: '',
     lastSyncTime: 0,
     syncInterval: 300000, // Sync every 5 minutes
@@ -102,6 +102,30 @@ let gameState = {
     reactorUpgradeCost: 50,
     lastUpdateTime: Date.now()
 };
+
+const LEADERBOARD_API = {
+    baseUrl: '',
+    endpoints: {
+        submit: '.netlify/functions/submit-score',
+        get: '.netlify/functions/get-leaderboard',
+        stats: '.netlify/functions/get-player-stats'
+    },
+    categories: {
+        totalScore: 'Total Score',
+        elementsFound: 'Elements Discovered',
+        topFusions: 'Fusion Reactions',
+        highestEnergy: 'Energy Achieved',
+        reactorLevel: 'Reactor Level'
+    }
+};
+
+// Device ID for tracking
+const deviceId = localStorage.getItem('elementFusionDeviceId') || 
+                 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+localStorage.setItem('elementFusionDeviceId', deviceId);
+
+// Country detection (fallback to IP detection via API)
+let playerCountry = localStorage.getItem('elementFusionCountry') || '??';
 
 // Load element data from external file
 async function loadElementData() {
@@ -771,10 +795,17 @@ function setupCloudSaveControls() {
 }
 // Leaderboard Functions
 function initializeLeaderboards() {
-    // Load leaderboards from localStorage
+    // Try to detect country
+    detectCountry();
+    
+    // Load leaderboards from localStorage as cache
     const savedLeaderboards = localStorage.getItem('elementFusionLeaderboards');
     if (savedLeaderboards) {
-        leaderboards = JSON.parse(savedLeaderboards);
+        try {
+            leaderboards = JSON.parse(savedLeaderboards);
+        } catch (e) {
+            console.warn('Failed to parse saved leaderboards');
+        }
     }
     
     // Setup leaderboard button
@@ -803,6 +834,9 @@ function initializeLeaderboards() {
             this.classList.add('active');
             const tabId = this.dataset.tab + 'Tab';
             document.getElementById(tabId).classList.add('active');
+            
+            // Load fresh data for this tab
+            loadLeaderboardTab(this.dataset.tab);
         });
     });
     
@@ -812,12 +846,284 @@ function initializeLeaderboards() {
         submitBtn.addEventListener('click', submitCurrentScore);
     }
     
+    // Setup refresh button
+    const refreshBtn = document.getElementById('refreshLeaderboard');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', refreshAllLeaderboards);
+    }
+    
     // Update current score display periodically
     setInterval(updateCurrentScoreDisplay, 2000);
+    
+    // Pre-load global leaderboards in background
+    setTimeout(() => {
+        loadGlobalLeaderboards();
+    }, 3000);
 }
+
+// Country detection
+async function detectCountry() {
+    if (playerCountry !== '??') return;
+    
+    try {
+        // Try to get country from free API
+        const response = await fetch('https://ipapi.co/json/');
+        if (response.ok) {
+            const data = await response.json();
+            playerCountry = data.country_code || '??';
+            localStorage.setItem('elementFusionCountry', playerCountry);
+        }
+    } catch (error) {
+        console.log('Country detection failed, using default');
+    }
+}
+
+// Load all global leaderboards
+async function loadGlobalLeaderboards() {
+    const categories = ['totalScore', 'elementsFound', 'topFusions', 'highestEnergy', 'reactorLevel'];
+    
+    for (const category of categories) {
+        try {
+            await loadLeaderboardTab(category);
+        } catch (error) {
+            console.warn(`Failed to load ${category} leaderboard:`, error);
+        }
+    }
+}
+
+// Load a specific leaderboard tab
+aasync function loadLeaderboardTab(category) {
+    const listElement = document.getElementById(`${category}List`);
+    if (!listElement) return;
+    
+    // Show loading state
+    listElement.innerHTML = '<div class="empty-leaderboard">🌍 Loading global scores...</div>';
+    
+    try {
+        // Use absolute URL for Netlify functions
+        const response = await fetch(
+            `${LEADERBOARD_API.endpoints.get}?category=${category}&playerName=${encodeURIComponent(playerName)}&limit=20`
+        );
+        
+        if (!response.ok) throw new Error('Network response failed');
+        
+        const data = await response.json();
+        
+        if (data.success && data.leaderboard) {
+            updateLeaderboardTabDisplay(category, data.leaderboard);
+            
+            // Cache in localStorage
+            leaderboards[category] = data.leaderboard;
+            localStorage.setItem('elementFusionLeaderboards', JSON.stringify(leaderboards));
+        } else {
+            throw new Error('Invalid response');
+        }
+    } catch (error) {
+        console.error(`Error loading ${category} leaderboard:`, error);
+        
+        // Fallback to cached data
+        if (leaderboards[category] && leaderboards[category].length > 0) {
+            updateLeaderboardTabDisplay(category, leaderboards[category]);
+            listElement.innerHTML += '<div class="leaderboard-warning">⚠️ Showing cached data</div>';
+        } else {
+            listElement.innerHTML = '<div class="empty-leaderboard">⚠️ Connection failed. Try again later.</div>';
+        }
+    }
+}
+// Update leaderboard tab display
+function updateLeaderboardTabDisplay(category, entries) {
+    const listElement = document.getElementById(`${category}List`);
+    if (!listElement) return;
+    
+    if (!entries || entries.length === 0) {
+        listElement.innerHTML = '<div class="empty-leaderboard">No scores yet. Be the first!</div>';
+        return;
+    }
+    
+    listElement.innerHTML = '';
+    
+    // Filter out duplicates and limit to top 20
+    const uniqueEntries = [];
+    const seenPlayers = new Set();
+    
+    for (const entry of entries) {
+        if (!seenPlayers.has(entry.player_name) && uniqueEntries.length < 20) {
+            seenPlayers.add(entry.player_name);
+            uniqueEntries.push(entry);
+        }
+    }
+    
+    uniqueEntries.forEach((entry, index) => {
+        const entryElement = document.createElement('div');
+        entryElement.className = 'leaderboard-entry';
+        
+        // Highlight current player's entry
+        if (entry.player_name === playerName) {
+            entryElement.classList.add('highlight');
+        }
+        
+        const rankClass = `rank-${entry.rank || index + 1}`;
+        const countryFlag = entry.country && entry.country !== '??' ? 
+            `<span class="country-flag">${getCountryFlag(entry.country)}</span>` : '';
+        
+        entryElement.innerHTML = `
+            <div class="rank ${rankClass}">#${entry.rank || index + 1}</div>
+            <div class="player-info">
+                <div class="player-name">
+                    ${countryFlag}
+                    ${entry.player_name}
+                </div>
+                <div class="player-meta">
+                    ${entry.device_id ? `<span class="device-id">📱</span>` : ''}
+                    <span class="player-date">${formatTimeAgo(entry.submitted_at)}</span>
+                </div>
+            </div>
+            <div class="player-score">${entry.score.toLocaleString()}</div>
+        `;
+        
+        listElement.appendChild(entryElement);
+    });
+    
+    // Add player's rank if not in top list
+    const playerEntry = entries.find(e => e.player_name === playerName);
+    if (!playerEntry && entries.length > 0) {
+        // Player is not in top list, show their rank separately
+        showPlayerRank(category);
+    }
+}
+
+// Submit score to global leaderboard
+async function submitScoreToGlobal(playerName, score, category) {
+    try {
+        const response = await fetch(`${LEADERBOARD_API.baseUrl}/${LEADERBOARD_API.endpoints.submit}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                playerName,
+                score,
+                category,
+                deviceId,
+                country: playerCountry
+            })
+        });
+        
+        if (!response.ok) throw new Error('Submission failed');
+        
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error submitting score:', error);
+        throw error;
+    }
+}
+
+// Refresh all leaderboards
+async function refreshAllLeaderboards() {
+    const tabs = document.querySelectorAll('.tab-content.active');
+    if (tabs.length > 0) {
+        const activeTab = tabs[0].id.replace('Tab', '');
+        await loadLeaderboardTab(activeTab);
+    }
+}
+
+// Get player statistics
+async function updatePlayerStats() {
+    try {
+        const response = await fetch(
+            `${LEADERBOARD_API.baseUrl}/${LEADERBOARD_API.endpoints.stats}?playerName=${encodeURIComponent(playerName)}`
+        );
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                // Update stats display
+                updateStatsDisplay(data);
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to fetch player stats:', error);
+    }
+}
+
+// Helper functions
+function getCountryFlag(countryCode) {
+    // Convert country code to flag emoji
+    if (!countryCode || countryCode.length !== 2) return '🏴';
+    
+    const codePoints = countryCode
+        .toUpperCase()
+        .split('')
+        .map(char => 127397 + char.charCodeAt());
+    
+    return String.fromCodePoint(...codePoints);
+}
+
+function formatTimeAgo(timestamp) {
+    if (!timestamp) return 'Just now';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffDays > 0) return `${diffDays}d ago`;
+    if (diffHours > 0) return `${diffHours}h ago`;
+    if (diffMins > 0) return `${diffMins}m ago`;
+    return 'Just now';
+}
+
+// Show player's rank if not in top list
+async function showPlayerRank(category) {
+    try {
+        const response = await fetch(
+            `${LEADERBOARD_API.baseUrl}/${LEADERBOARD_API.endpoints.get}?category=${category}&playerName=${encodeURIComponent(playerName)}&limit=50`
+        );
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.leaderboard) {
+                const playerEntry = data.leaderboard.find(e => e.player_name === playerName);
+                if (playerEntry) {
+                    const listElement = document.getElementById(`${category}List`);
+                    const separator = document.createElement('div');
+                    separator.className = 'player-rank-separator';
+                    separator.innerHTML = `<div class="separator-text">Your Rank</div>`;
+                    listElement.appendChild(separator);
+                    
+                    const entryElement = document.createElement('div');
+                    entryElement.className = 'leaderboard-entry highlight';
+                    entryElement.innerHTML = `
+                        <div class="rank rank-player">#${playerEntry.rank}</div>
+                        <div class="player-info">
+                            <div class="player-name">${playerName} (You)</div>
+                            <div class="player-date">${formatTimeAgo(playerEntry.submitted_at)}</div>
+                        </div>
+                        <div class="player-score">${playerEntry.score.toLocaleString()}</div>
+                    `;
+                    listElement.appendChild(entryElement);
+                }
+            }
+        }
+    } catch (error) {
+        // Silently fail
+    }
+}
+
 function showLeaderboard() {
     updateCurrentScoreDisplay();
-    updateLeaderboardDisplay();
+    
+    // Find active tab and load its data
+    const activeTab = document.querySelector('.tab-btn.active');
+    if (activeTab) {
+        loadLeaderboardTab(activeTab.dataset.tab);
+    } else {
+        // Default to first tab
+        loadLeaderboardTab('totalScore');
+    }
     
     const leaderboardContainer = document.getElementById('leaderboardContainer');
     leaderboardContainer.style.display = 'flex';
@@ -833,8 +1139,7 @@ function showLeaderboard() {
             }
         });
     }, 100);
-}
-function hideLeaderboard() {
+}function hideLeaderboard() {
     const leaderboardContainer = document.getElementById('leaderboardContainer');
     leaderboardContainer.style.display = 'none';
     
@@ -1289,12 +1594,18 @@ function calculateScore() {
     // Points for fusions completed
     score += gameState.mergeCount * 50;
     
-    // Points for reactor level
-    score += gameState.reactorLevel * 200;
+    // Points for reactor level (exponential)
+    score += Math.pow(gameState.reactorLevel, 2) * 100;
     
-    // Points for highest energy achieved
-    const highestEnergy = localStorage.getItem('elementFusionHighestEnergy') || 0;
-    score += parseInt(highestEnergy) * 0.1;
+    // Points for energy (logarithmic, diminishing returns)
+    score += Math.log10(gameState.fusionEnergy + 1) * 100;
+    
+    // Bonus for discovery percentage
+    const discoveryPercentage = (gameState.elementsFound / elements.length) * 100;
+    score += discoveryPercentage * 50;
+    
+    // Penalty for time? (optional)
+    // score -= gameState.mergeCount * 0.1; // Small penalty for many merges
     
     return Math.floor(score);
 }
@@ -1385,69 +1696,118 @@ function updateLeaderboardTab(leaderboardKey, scoreLabel) {
     });
 }
 
-function submitCurrentScore() {
+async function submitCurrentScore() {
     // Ask for player name if not set
-    if (playerName === 'Anonymous') {
-        const name = prompt('Enter your name for the leaderboard:', playerName);
+    if (playerName === 'Anonymous' || playerName.trim() === '') {
+        const name = prompt('Enter your name for the global leaderboard (3-20 characters):', playerName);
         if (name && name.trim()) {
-            playerName = name.trim();
+            const trimmedName = name.trim().substring(0, 20);
+            if (trimmedName.length < 3) {
+                updateMergeResult('Name must be at least 3 characters', false);
+                return;
+            }
+            playerName = trimmedName;
             localStorage.setItem('elementFusionPlayerName', playerName);
         } else {
-            return; // User cancelled
+            return;
         }
-    const score = calculateScore();
-	const rank = getPlayerRank(playerName, 'elementsFound');
-    updateMergeResult(`Score submitted! You're ranked #${rank}`, true);
-    
-    // Celebrate if in top 3
-    if (rank <= 3) {
-        celebrateHighScore(rank);
-		}
-
     }
     
+    // Calculate scores for all categories
+    const scores = {
+        totalScore: calculateScore(),
+        elementsFound: gameState.elementsFound,
+        topFusions: gameState.mergeCount,
+        highestEnergy: gameState.fusionEnergy,
+        reactorLevel: gameState.reactorLevel
+    };
+    
+    // Show loading message
+    updateMergeResult('📡 Submitting to global leaderboard...', true);
+    
+    let submittedCount = 0;
+    let bestRank = Infinity;
+    let bestCategory = '';
+    let globalError = false;
+    
+    // Submit each category to global
+    for (const [category, score] of Object.entries(scores)) {
+        if (score > 0) {
+            try {
+                const response = await fetch(LEADERBOARD_API.endpoints.submit, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        playerName,
+                        score,
+                        category,
+                        deviceId,
+                        country: playerCountry
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success) {
+                        submittedCount++;
+                        if (result.rank < bestRank) {
+                            bestRank = result.rank;
+                            bestCategory = category;
+                        }
+                    }
+                } else {
+                    throw new Error('Submission failed');
+                }
+            } catch (error) {
+                console.warn(`Failed to submit ${category}:`, error);
+                globalError = true;
+            }
+        }
+    }
+    
+    // Update local leaderboards as backup
     const currentDate = new Date().toISOString();
+    Object.entries(scores).forEach(([category, score]) => {
+        if (score > 0) {
+            addToLeaderboard(category, {
+                name: playerName,
+                score: score,
+                date: currentDate,
+                category: category
+            });
+        }
+    });
     
-    // Create score entries for different categories
-    const fusionEntry = {
-        name: playerName,
-        score: gameState.mergeCount,
-        date: currentDate,
-        category: 'Fusions'
-    };
-    
-    const elementsEntry = {
-        name: playerName,
-        score: gameState.elementsFound,
-        date: currentDate,
-        category: 'Elements'
-    };
-    
-    const energyEntry = {
-        name: playerName,
-        score: gameState.fusionEnergy,
-        date: currentDate,
-        category: 'Energy'
-    };
-    
-    // Add to leaderboards
-    addToLeaderboard('topFusions', fusionEntry);
-    addToLeaderboard('elementsFound', elementsEntry);
-    addToLeaderboard('highestEnergy', energyEntry);
-    
-    // Save to localStorage
     saveLeaderboards();
-    
-    // Update display
     updateLeaderboardDisplay();
     updateCurrentScoreDisplay();
     
-    // Show success message
-	const rank = getPlayerRank(playerName, 'elementsFound');
-	updateMergeResult(`Score submitted! You're ranked #${rank}`, true);
-	if (rank <= 3) {
-		celebrateHighScore(rank);
-	}
+    if (submittedCount > 0) {
+        // Update leaderboard display
+        refreshAllLeaderboards();
+        
+        // Show success message
+        if (bestRank <= 10) {
+            const categoryName = LEADERBOARD_API.categories[bestCategory] || bestCategory;
+            updateMergeResult(`🎉 Rank #${bestRank} globally in ${categoryName}!`, true);
+            
+            // Special celebration for top 3
+            if (bestRank <= 3) {
+                celebrateHighScore(bestRank);
+            }
+        } else {
+            updateMergeResult(`${submittedCount} scores submitted to global leaderboard!`, true);
+        }
+        
+        // Update player stats
+        updatePlayerStats();
+    } else if (globalError) {
+        updateMergeResult('⚠️ Submitted locally (offline mode). Try again when online.', false);
+    } else {
+        updateMergeResult('Submitted to local leaderboard!', true);
+    }
 }
 
 function addToLeaderboard(leaderboardKey, newEntry) {

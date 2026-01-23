@@ -146,79 +146,73 @@
 <div class="leaderboard-container" style="display: none;" id="leaderboardContainer">
     <div class="leaderboard-modal">
         <div class="leaderboard-header">
-            <h3>🏆 Leaderboards 🏆</h3>
-            <button class="close-leaderboard" id="closeLeaderboard">✕</button>
+            <h3>🌍 Global Leaderboards</h3>
+            <div class="header-actions">
+                <button class="refresh-btn" id="refreshLeaderboard" title="Refresh">
+                    🔄
+                </button>
+                <button class="close-leaderboard" id="closeLeaderboard">✕</button>
+            </div>
         </div>
         
         <div class="leaderboard-tabs">
-            <button class="tab-btn active" data-tab="topFusions">Most Fusions</button>
-            <button class="tab-btn" data-tab="elementsFound">Elements Found</button>
-            <button class="tab-btn" data-tab="highestEnergy">Highest Energy</button>
+            <button class="tab-btn active" data-tab="totalScore">🏆 Total Score</button>
+            <button class="tab-btn" data-tab="elementsFound">🔬 Elements</button>
+            <button class="tab-btn" data-tab="topFusions">⚛️ Fusions</button>
+            <button class="tab-btn" data-tab="highestEnergy">⚡ Energy</button>
+            <button class="tab-btn" data-tab="reactorLevel">🏭 Reactor</button>
         </div>
         
         <div class="leaderboard-content">
-            <div class="tab-content active" id="topFusionsTab">
-                <div class="leaderboard-list" id="topFusionsList">
-                    <!-- Will be populated by JavaScript -->
+            <div class="tab-content active" id="totalScoreTab">
+                <div class="leaderboard-list" id="totalScoreList">
+                    <!-- Global scores will load here -->
                 </div>
             </div>
             <div class="tab-content" id="elementsFoundTab">
                 <div class="leaderboard-list" id="elementsFoundList">
-                    <!-- Will be populated by JavaScript -->
+                    <!-- Global scores will load here -->
+                </div>
+            </div>
+            <div class="tab-content" id="topFusionsTab">
+                <div class="leaderboard-list" id="topFusionsList">
+                    <!-- Global scores will load here -->
                 </div>
             </div>
             <div class="tab-content" id="highestEnergyTab">
                 <div class="leaderboard-list" id="highestEnergyList">
-                    <!-- Will be populated by JavaScript -->
+                    <!-- Global scores will load here -->
+                </div>
+            </div>
+            <div class="tab-content" id="reactorLevelTab">
+                <div class="leaderboard-list" id="reactorLevelList">
+                    <!-- Global scores will load here -->
                 </div>
             </div>
         </div>
         
         <div class="leaderboard-submit">
-            <button id="submitScoreBtn" class="submit-score-btn">Submit Current Score</button>
+            <button id="submitScoreBtn" class="submit-score-btn">
+                🚀 Submit to Global Leaderboard
+            </button>
             <div class="score-info">
-                <p>Your current score: <span id="currentScore">0</span> points</p>
-                <p>Best: <span id="bestScore">0</span> points</p>
+                <p>Your current score: <span id="currentScore">0</span></p>
+                <p>Global rank: <span id="globalRank">--</span></p>
             </div>
-        <div class="save-settings">
-    <div class="cloud-save-container">
-        <div class="cloud-save-header">
-            <h4>☁️ Cloud Save</h4>
         </div>
         
-        <div class="cloud-toggle">
-            <input type="checkbox" id="cloudToggle">
-            <label for="cloudToggle">Enable Cloud Save</label>
-        </div>
-        
-        <input type="text" 
-               class="api-key-input" 
-               id="apiKeyInput" 
-               placeholder="Enter API Key (if required)">
-        
-        <div class="cloud-controls">
-            <button id="cloudSyncBtn" class="cloud-sync-btn">
-                ☁️ Sync to Cloud
-            </button>
-            <button id="cloudLoadBtn" class="cloud-load-btn">
-                ⬇️ Load from Cloud
-            </button>
-        </div>
-        
-        <div class="conflict-resolution">
-            <label for="conflictRes">Conflict Resolution:</label>
-            <select id="conflictRes">
-                <option value="local">Keep Local Save</option>
-                <option value="remote">Use Cloud Save</option>
-                <option value="newest">Use Newest Save</option>
-            </select>
+        <div class="leaderboard-footer">
+            <div class="player-info-display">
+                <span>Player: <strong id="displayPlayerName">${playerName}</strong></span>
+                <span id="playerCountry">${playerCountry === '??' ? '' : getCountryFlag(playerCountry)}</span>
+            </div>
+            <div class="leaderboard-stats">
+                <span>📊 Live global rankings</span>
+                <span>🔄 Updates in real-time</span>
+            </div>
         </div>
     </div>
 </div>
-        </div>
-    </div>
-</div>
-
 <!-- Add Leaderboard button to the controls -->
             </div>
             

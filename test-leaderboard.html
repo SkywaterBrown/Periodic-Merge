@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Leaderboard Test</title>
+</head>
+<body>
+    <h1>Test Leaderboard Functions</h1>
+    
+    <button onclick="testSubmit()">Test Submit Score</button>
+    <button onclick="testGet()">Test Get Leaderboard</button>
+    <button onclick="testCloudSave()">Test Cloud Save</button>
+    
+    <div id="result"></div>
+    
+    <script>
+        async function testSubmit() {
+            try {
+                const response = await fetch('/.netlify/functions/submit-score', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        playerName: 'TestPlayer',
+                        score: 1000,
+                        category: 'totalScore',
+                        deviceId: 'test-device-123',
+                        country: 'US'
+                    })
+                });
+                const result = await response.json();
+                document.getElementById('result').innerHTML = 
+                    `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('result').innerHTML = 
+                    `<pre style="color: red;">Error: ${error.message}</pre>`;
+            }
+        }
+        
+        async function testGet() {
+            try {
+                const response = await fetch('/.netlify/functions/get-leaderboard?category=totalScore&limit=5');
+                const result = await response.json();
+                document.getElementById('result').innerHTML = 
+                    `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('result').innerHTML = 
+                    `<pre style="color: red;">Error: ${error.message}</pre>`;
+            }
+        }
+    </script>
+</body>
+</html>
